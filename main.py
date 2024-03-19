@@ -1,8 +1,13 @@
 from fastapi import FastAPI
+from dotenv import load_dotenv
+import init_db
 import requests
 import hashlib
 import datetime
 import ssl
+
+load_dotenv()
+init_db.dbInit()
 
 class TLSAdapter(requests.adapters.HTTPAdapter):
 
@@ -30,13 +35,13 @@ def hash_params():
     return hashed_params
 
 @app.get("/api/data")
-def api_data():
+def get_api_data():
     params = {'orderBy':'name', 'limit':'100','ts': ts, 'apikey': public_key, 'hash': hash_params()}
-    marvel_characters = 'https://gateway.marvel.com:443/v1/public/characters'
+    characters_url = 'https://gateway.marvel.com:443/v1/public/characters'
 
     session = requests.session()
     session.mount('https://', TLSAdapter())
-    res = session.get(marvel_characters, params=params)
+    res = session.get(characters_url, params=params)
 
     if res.status_code == 200:
         res_json = res.json()
@@ -59,3 +64,37 @@ def api_data():
     
     else:
         print("Failed to retrieve data from the marvel API. Status code:", res.status_code)
+
+@app.post("/api/data")
+def post_api_data():
+    params = {'orderBy':'name', 'limit':'10','ts': ts, 'apikey': public_key, 'hash': hash_params()}
+    characters_url = 'https://gateway.marvel.com:443/v1/public/characters'
+
+    session = requests.session()
+    session.mount('https://', TLSAdapter())
+    res = session.get(characters_url, params=params)
+
+    if res.status_code == 200:
+        res_json = res.json()
+
+        results = res_json['data']['results']
+
+        conn = init_db.getDBConn()
+        cursor = conn.cursor()
+
+        pretty_results_total = []
+        for i in range(len(results)):
+            pretty_results = {}
+            pretty_results['id'] = results[i]['id']
+            pretty_results['name'] = results[i]['name']
+            pretty_results['description'] = results[i]['description']
+            pretty_results['modified'] = results[i]['modified']
+            pretty_results['thumbnail_path'] = results[i]['thumbnail']['path']
+            pretty_results['thumbnail_extension'] = results[i]['thumbnail']['extension']
+
+            # pretty_results_total.append(pretty_results)
+
+            cursor.execute('''INSERT INTO characters (id, name) VALUES (%s, %s);''', str(results[i]['id']), results[i]['name'])
+    
+    else:
+        print("Failed to save data from the marvel API into db. Status code:", res.status_code)
