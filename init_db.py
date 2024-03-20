@@ -1,19 +1,27 @@
 import mysql.connector
+import os
 
-# Adding db connection configuration
+# Method to get db connection
 def getDBConn():
     conn = mysql.connector.connect(
-        host='127.0.0.1',
-        user='root',
-        port='3306',
-        password='123456789'
+        host=os.getenv('MYSQL_HOST'),
+        db=os.getenv('MYSQL_DB'),
+        user=os.getenv('MYSQL_USER'),
+        port=os.getenv('MYSQL_PORT'),
+        password=os.getenv('MYSQL_PASSWORD')
     )
 
     return conn
 
 def dbInit():
+    conn = mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST'),
+        user=os.getenv('MYSQL_USER'),
+        port=os.getenv('MYSQL_PORT'),
+        password=os.getenv('MYSQL_PASSWORD')
+    )
+
     # Creating a cursor object using the cursor() method
-    conn = getDBConn()
     cursor = conn.cursor()
 
     #Initialize db new instance
@@ -24,7 +32,8 @@ def dbInit():
                     DROP TABLE IF EXISTS characters;
                    
                     CREATE TABLE characters(
-                        id INT NOT NULL PRIMARY KEY,
+                        id SERIAL PRIMARY KEY,
+                        marvel_id INT NOT NULL,
                         name VARCHAR(50) NOT NULL,
                         description TEXT,
                         modified DATE,
