@@ -1,16 +1,13 @@
 from fastapi import FastAPI
 import os
 from dotenv import load_dotenv
-import init_db
 import requests
 import hashlib
 from datetime import datetime
-import session_manager
-
-app = FastAPI()
+import mysql.connector
 
 load_dotenv()
-init_db.dbInit()
+app = FastAPI()
 
 # ---------------------------------------------- url params --------------------------------------------- #
 ts = datetime.now().strftime('%Y-%m-%d%H:%M:%S')
@@ -20,13 +17,22 @@ hash_key = hashlib.md5(f'{ts}{private_key}{public_key}'.encode('utf-8')).hexdige
 params = {'orderBy':'name', 'limit':'100','ts': ts, 'apikey': public_key, 'hash': hash_key}
 characters_url = 'https://gateway.marvel.com:443/v1/public/characters'
 # ------------------------------------------------------------------------------------------------------- #
+    
+def getDBConn():
+    conn = mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST'),
+        db=os.getenv('MYSQL_DB'),
+        user=os.getenv('MYSQL_USER'),
+        port=os.getenv('MYSQL_PORT'),
+        password=os.getenv('MYSQL_PASSWORD')
+    )
+
+    return conn
 
 @app.get("/api/data")
 def get_api_data():
     try:
-        session = requests.session()
-        session.mount('https://', session_manager.TLSAdapter())
-        res = session.get(characters_url, params=params)
+        res = requests.get(characters_url, params=params)
     except Exception as err:
         error_msg = f'Error while calling marvel API: {err}'
         return error_msg
@@ -60,11 +66,10 @@ def get_api_data():
 @app.post("/api/data")
 def post_api_data():
     try:
-        session = requests.session()
-        session.mount('https://', session_manager.TLSAdapter())
-        res = session.get(characters_url, params=params)
+        res = requests.get(characters_url, params=params)
     except Exception as err:
         error_msg = f'Error while calling marvel API: {err}'
+        print(error_msg)
         return error_msg
 
     if res.status_code == 200:
@@ -72,7 +77,7 @@ def post_api_data():
         characters = res_json['data']['results']
 
         try:
-            conn = init_db.getDBConn()
+            conn = getDBConn()
             cursor = conn.cursor()
 
             for i in range(len(characters)):
@@ -88,12 +93,10 @@ def post_api_data():
             conn.close()
         except Exception as err:
             error_msg = f'Error while saving character records: {err}'
+            print(error_msg)
             return error_msg
 
         info_msg = f'Saved {len(characters)} character records successfully into database. Status code: {res.status_code}'
-        print(info_msg)
-
-        info_msg = f'Saved marvel characters data successfully into database. Status code: {res.status_code}'
         print(info_msg)
 
         return info_msg
@@ -106,7 +109,7 @@ def post_api_data():
 @app.get("/api/data/{character_id}")
 def get_api_data_character(character_id: int):
     try:
-        conn = init_db.getDBConn()
+        conn = getDBConn()
         cursor = conn.cursor()
 
         cursor.execute('''SELECT * FROM characters WHERE id = %s;''', (character_id,))
@@ -125,4 +128,5 @@ def get_api_data_character(character_id: int):
         return character_dir
     except Exception as err:
         error_msg = f'Error while getting character from db: {err}'
+        print(error_msg)
         return error_msg

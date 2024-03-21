@@ -1,0 +1,16 @@
+services:
+  api:
+    build: ./api/
+    command: sh -c "uvicorn app.main:app --reload --port=8000 --host=0.0.0.0"
+    ports:
+      - '8000:8000'
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+
+  db:
+    build: ./db/
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 'root'
