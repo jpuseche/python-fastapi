@@ -7,8 +7,8 @@ import hashlib
 from datetime import datetime
 import mysql.connector
 
-load_dotenv()
-app = FastAPI()
+load_dotenv() # Load api env variables
+app = FastAPI() # Initialize App
 
 # ---------------------------------------------- url params --------------------------------------------- #
 ts = datetime.now().strftime('%Y-%m-%d%H:%M:%S')
@@ -18,7 +18,8 @@ hash_key = hashlib.md5(f'{ts}{private_key}{public_key}'.encode('utf-8')).hexdige
 params = {'orderBy':'name', 'limit':'100','ts': ts, 'apikey': public_key, 'hash': hash_key}
 characters_url = 'https://gateway.marvel.com:443/v1/public/characters'
 # ------------------------------------------------------------------------------------------------------- #
-    
+
+# Function to get connection to the containerized MySQL database
 def get_db_conn():
     conn = mysql.connector.connect(
         host=os.getenv('MYSQL_HOST'),
@@ -30,6 +31,7 @@ def get_db_conn():
 
     return conn
 
+# Function to convert characters directory to only contain relevant keys (fields)
 def convert_to_pretty(characters):
     characters_pretty = []
     for i in range(len(characters)):
@@ -45,7 +47,8 @@ def convert_to_pretty(characters):
 
     return characters_pretty
 
-html = """
+# template where the WebSocket connection is going to be called from
+marvel_main_template = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -75,17 +78,18 @@ html = """
 </html>
 """
 
-
+# Serving template in charge of sending the request to the web socket
 @app.get("/")
 async def get():
-    return HTMLResponse(html)
+    return HTMLResponse(marvel_main_template)
 
+# Web Socket to return Marvel API json
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     while True:
         try:
-            res = requests.get(characters_url, params=params)
+            res = requests.get(characters_url, params=params) # Fetching Marvel API Data
         except Exception as err:
             error_msg = f'Error while calling marvel API: {err}'
             return error_msg
@@ -94,22 +98,23 @@ async def websocket_endpoint(websocket: WebSocket):
             res_json = res.json()
 
             characters = res_json['data']['results']
-            characters_pretty = convert_to_pretty(characters)
+            characters_pretty = convert_to_pretty(characters) # Calling function to only show relevant fields
             
-            await websocket.receive()
+            await websocket.receive() # Needs to wait for socket to receive request data
             return await websocket.send_text(str(characters_pretty))
         
         else:
             error_msg = f'Failed to retrieve data from the marvel API. Status code: {res.status_code}'
             print(error_msg)
 
-            await websocket.receive()
+            await websocket.receive() # Needs to wait for socket to receive request data
             return await websocket.send_text(str(error_msg))
 
+# Get method to return Marvel API json
 @app.get("/api/data")
 def get_api_data():
     try:
-        res = requests.get(characters_url, params=params)
+        res = requests.get(characters_url, params=params) # Fetching Marvel API Data
     except Exception as err:
         error_msg = f'Error while calling marvel API: {err}'
         return error_msg
@@ -119,7 +124,7 @@ def get_api_data():
 
         characters = res_json['data']['results']
 
-        characters_pretty = convert_to_pretty(characters)
+        characters_pretty = convert_to_pretty(characters) # Calling function to only show relevant fields
 
         return characters_pretty
     
@@ -129,10 +134,11 @@ def get_api_data():
 
         return error_msg
 
+# Post method to store Marvel API data
 @app.post("/api/data")
 def post_api_data():
     try:
-        res = requests.get(characters_url, params=params)
+        res = requests.get(characters_url, params=params) # Fetching Marvel API Data
     except Exception as err:
         error_msg = f'Error while calling marvel API: {err}'
         print(error_msg)
@@ -154,7 +160,7 @@ def post_api_data():
                                 characters[i]['modified'].partition('T')[0],
                                 characters[i]['thumbnail']['path'],
                                 characters[i]['thumbnail']['extension']))
-                conn.commit()
+                conn.commit() # Fetching database data
             
             conn.close()
         except Exception as err:
@@ -171,7 +177,8 @@ def post_api_data():
         print(error_msg)
 
         return error_msg
-    
+
+# Get method to return specific Marvel API record
 @app.get("/api/data/{character_id}")
 def get_api_data_character(character_id: int):
     try:
@@ -179,7 +186,7 @@ def get_api_data_character(character_id: int):
         cursor = conn.cursor()
 
         cursor.execute('''SELECT * FROM characters WHERE id = %s;''', (character_id,))
-        character = cursor.fetchone()
+        character = cursor.fetchone() # Fetching database data
         conn.close()
 
         character_dir = {
