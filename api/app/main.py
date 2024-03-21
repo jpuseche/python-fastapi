@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse
 import os
 from dotenv import load_dotenv
 import requests
@@ -18,7 +19,7 @@ params = {'orderBy':'name', 'limit':'100','ts': ts, 'apikey': public_key, 'hash'
 characters_url = 'https://gateway.marvel.com:443/v1/public/characters'
 # ------------------------------------------------------------------------------------------------------- #
     
-def getDBConn():
+def get_db_conn():
     conn = mysql.connector.connect(
         host=os.getenv('MYSQL_HOST'),
         db=os.getenv('MYSQL_DB'),
@@ -28,6 +29,82 @@ def getDBConn():
     )
 
     return conn
+
+def convert_to_pretty(characters):
+    characters_pretty = []
+    for i in range(len(characters)):
+        character = {
+            'id': characters[i]['id'],
+            'name': characters[i]['name'],
+            'description': characters[i]['description'],
+            'modified': characters[i]['modified'],
+            'thumbnail': characters[i]['thumbnail']
+        }
+
+        characters_pretty.append(character)
+
+    return characters_pretty
+
+html = """
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Marvel Api Data</title>
+    </head>
+    <body>
+        <h1>Marvel Api Data</h1>
+        <form action="" onsubmit="sendMessage(event)">
+            <span>Click Submit to get Marvel Api Data</span>
+            <button>Submit</button>
+        </form>
+        <div id='content-wrapper'>
+        </div>
+        <script>
+            var ws = new WebSocket("ws://localhost:8000/ws");
+            ws.onmessage = function(event) {
+                var contentWrapper = document.getElementById('content-wrapper')
+                var content = document.createTextNode(event.data)
+                contentWrapper.appendChild(content)
+            };
+            function sendMessage(event) {
+                ws.send(true)
+                event.preventDefault()
+            }
+        </script>
+    </body>
+</html>
+"""
+
+
+@app.get("/")
+async def get():
+    return HTMLResponse(html)
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        try:
+            res = requests.get(characters_url, params=params)
+        except Exception as err:
+            error_msg = f'Error while calling marvel API: {err}'
+            return error_msg
+
+        if res.status_code == 200:
+            res_json = res.json()
+
+            characters = res_json['data']['results']
+            characters_pretty = convert_to_pretty(characters)
+            
+            await websocket.receive()
+            return await websocket.send_text(str(characters_pretty))
+        
+        else:
+            error_msg = f'Failed to retrieve data from the marvel API. Status code: {res.status_code}'
+            print(error_msg)
+
+            await websocket.receive()
+            return await websocket.send_text(str(error_msg))
 
 @app.get("/api/data")
 def get_api_data():
@@ -42,17 +119,7 @@ def get_api_data():
 
         characters = res_json['data']['results']
 
-        characters_pretty = []
-        for i in range(len(characters)):
-            character = {
-                'id': characters[i]['id'],
-                'name': characters[i]['name'],
-                'description': characters[i]['description'],
-                'modified': characters[i]['modified'],
-                'thumbnail': characters[i]['thumbnail']
-            }
-
-            characters_pretty.append(character)
+        characters_pretty = convert_to_pretty(characters)
 
         return characters_pretty
     
@@ -76,7 +143,7 @@ def post_api_data():
         characters = res_json['data']['results']
 
         try:
-            conn = getDBConn()
+            conn = get_db_conn()
             cursor = conn.cursor()
 
             for i in range(len(characters)):
@@ -108,7 +175,7 @@ def post_api_data():
 @app.get("/api/data/{character_id}")
 def get_api_data_character(character_id: int):
     try:
-        conn = getDBConn()
+        conn = get_db_conn()
         cursor = conn.cursor()
 
         cursor.execute('''SELECT * FROM characters WHERE id = %s;''', (character_id,))
