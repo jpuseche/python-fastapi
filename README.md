@@ -53,7 +53,7 @@ If the request is unable to find the record on the db, you'll get an error messa
 
 1. python: This project uses python for the api codebase. As it is a high level language and has a clear syntax to understand, it works wonders as a demonstration of the api logic.
 
-2 fastapi: This is the python framework in which the api is set up.
+2. fastapi: This is the python framework in which the api is set up.
 
 3. mysql: The mysql database on this project is used to store and fetch marvel characters data records.
 
