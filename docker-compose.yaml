@@ -13,4 +13,7 @@ services:
     build: ./db/
     restart: always
     environment:
+      MYSQL_DATABASE: 'python_fastapi'
       MYSQL_ROOT_PASSWORD: 'root'
+    ports:
+      - '3307:3306'

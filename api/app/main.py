@@ -49,8 +49,7 @@ def get_api_data():
                 'name': characters[i]['name'],
                 'description': characters[i]['description'],
                 'modified': characters[i]['modified'],
-                'thumbnail': characters[i]['thumbnail'],
-                'comics': characters[i]['comics'],
+                'thumbnail': characters[i]['thumbnail']
             }
 
             characters_pretty.append(character)
@@ -118,11 +117,14 @@ def get_api_data_character(character_id: int):
 
         character_dir = {
             'id': character[0],
-            'name': character[1],
-            'description': character[2],
-            'modified': character[3],
-            'thumbnail': character[4],
-            'comics': character[5]
+            'marvelId': character[1],
+            'name': character[2],
+            'description': character[3],
+            'modified': character[4],
+            'thumbnail': {
+                'path': character[5],
+                'extension': character[6],
+            }
         }
 
         return character_dir
